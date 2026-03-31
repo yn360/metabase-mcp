@@ -18,11 +18,17 @@ export interface CachedResponse<T> {
   fetchTime: number;
 }
 
+export interface RuntimeCredentials {
+  username: string;
+  password: string;
+}
+
 export class MetabaseApiClient {
   private baseUrl: string;
   public sessionToken: string | null = null;
   private apiKey: string | null = null;
   private authMethod: AuthMethod;
+  private runtimeCredentials: RuntimeCredentials | null = null;
   private headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -43,8 +49,9 @@ export class MetabaseApiClient {
   private readonly CACHE_TTL_MS: number;
   private readonly REQUEST_TIMEOUT_MS: number;
 
-  constructor() {
+  constructor(credentials?: RuntimeCredentials) {
     this.baseUrl = config.METABASE_URL;
+    this.runtimeCredentials = credentials ?? null;
     this.authMethod = config.METABASE_API_KEY ? AuthMethod.API_KEY : AuthMethod.SESSION;
     this.apiKey = config.METABASE_API_KEY || null;
     this.CACHE_TTL_MS = config.CACHE_TTL_MS;
@@ -52,6 +59,8 @@ export class MetabaseApiClient {
 
     if (this.apiKey) {
       this.logInfo('Using API Key authentication method');
+    } else if (this.runtimeCredentials) {
+      this.logInfo('Using runtime credentials (session token) authentication method');
     } else {
       this.logInfo('Using Session Token authentication method');
     }
@@ -698,13 +707,12 @@ export class MetabaseApiClient {
     }
 
     this.logInfo('Initiating authentication with Metabase');
+    const username = this.runtimeCredentials?.username ?? config.METABASE_USER_EMAIL;
+    const password = this.runtimeCredentials?.password ?? config.METABASE_PASSWORD;
     try {
       const response = await this.request<{ id: string }>('/api/session', {
         method: 'POST',
-        body: JSON.stringify({
-          username: config.METABASE_USER_EMAIL,
-          password: config.METABASE_PASSWORD,
-        }),
+        body: JSON.stringify({ username, password }),
       });
 
       this.sessionToken = response.id;

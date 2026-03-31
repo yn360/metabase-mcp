@@ -36,7 +36,12 @@ process.on('unhandledRejection', (reason: unknown, _promise: Promise<unknown>) =
 
 // Start the Metabase MCP Server
 const server = new MetabaseServer();
-server.run().catch(error => {
+
+const transport = process.env.MCP_TRANSPORT ?? 'stdio';
+const port = parseInt(process.env.PORT ?? '3000', 10);
+const startFn = transport === 'http' ? server.runHttp.bind(server, port) : server.run.bind(server);
+
+startFn().catch(error => {
   console.error(
     JSON.stringify({
       timestamp: new Date().toISOString(),

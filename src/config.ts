@@ -53,11 +53,7 @@ const envSchema = z
       .default('true')
       .transform(val => val.toLowerCase() === 'true'),
   })
-  .refine(data => data.METABASE_API_KEY || (data.METABASE_USER_EMAIL && data.METABASE_PASSWORD), {
-    message:
-      'Either METABASE_API_KEY or both METABASE_USER_EMAIL and METABASE_PASSWORD must be provided',
-    path: ['METABASE_API_KEY'],
-  });
+;
 
 // Parse and validate environment variables
 function validateEnvironment() {

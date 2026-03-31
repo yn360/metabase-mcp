@@ -1,3 +1,4 @@
+export { handleAuthenticate } from './authenticate.js';
 export { handleList } from './list/index.js';
 export { handleExecute } from './execute/index.js';
 export { handleExport } from './export/index.js';

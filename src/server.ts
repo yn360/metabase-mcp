@@ -1,5 +1,7 @@
+import { createServer } from 'node:http';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 const VERSION = '1.1.5';
 import {
@@ -10,12 +12,15 @@ import {
   ListToolsRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
+  type CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import { LogLevel } from './config.js';
 import { generateRequestId } from './utils/index.js';
 // Note: ApiError and isMcpError removed - errors are caught and returned, not type-checked
 import { MetabaseApiClient } from './api.js';
+import { config } from './config.js';
 import {
+  handleAuthenticate,
   handleList,
   handleExecute,
   handleExport,
@@ -33,6 +38,7 @@ import { handleListPrompts, handleGetPrompt } from './handlers/prompts/index.js'
 export class MetabaseServer {
   private server: Server;
   private apiClient: MetabaseApiClient;
+  private sessionClients: Map<string, MetabaseApiClient> = new Map();
 
   constructor() {
     this.server = new Server(
@@ -159,11 +165,52 @@ export class MetabaseServer {
   /**
    * Set up tool handlers
    */
+  private getClientForSession(sessionId: string): MetabaseApiClient {
+    const sessionClient = this.sessionClients.get(sessionId);
+    if (sessionClient) {
+      return sessionClient;
+    }
+    // Fall back to static env-var client if credentials are configured
+    if (config.METABASE_API_KEY || (config.METABASE_USER_EMAIL && config.METABASE_PASSWORD)) {
+      return this.apiClient;
+    }
+    throw new Error(
+      'No credentials for this session. ' +
+        'Read ~/.mbrc (format: username=...\\npassword=...) and call metabase_authenticate(username=..., password=...) first.'
+    );
+  }
+
   private setupToolHandlers() {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       this.logInfo('Processing request to list available tools');
       return {
         tools: [
+          {
+            name: 'metabase_authenticate',
+            description:
+              'Store Metabase credentials for this session. Call this before any other tool when env vars are not configured. ' +
+              'Credentials can be found in ~/.mbrc (format: username=... / password=... on separate lines).',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                username: {
+                  type: 'string',
+                  description: 'Metabase user email address.',
+                },
+                password: {
+                  type: 'string',
+                  description: 'Metabase password.',
+                },
+              },
+              required: ['username', 'password'],
+            },
+          },
           {
             name: 'search',
             description:
@@ -472,16 +519,15 @@ export class MetabaseServer {
       };
     });
 
-    this.server.setRequestHandler(CallToolRequestSchema, async request => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest, extra: { sessionId?: string }) => {
       const toolName = request.params?.name || 'unknown';
       const requestId = generateRequestId();
+      const sessionId = extra?.sessionId ?? 'default';
 
       this.logInfo(`Processing tool execution request: ${toolName}`, {
         requestId,
         arguments: request.params?.arguments,
       });
-
-      await this.apiClient.getSessionToken();
 
       // Helper to wrap handler calls and convert errors to tool results
       // Handles both sync and async handlers
@@ -500,13 +546,24 @@ export class MetabaseServer {
         }
       };
 
+      // metabase_authenticate does not require an existing client
+      if (request.params?.name === 'metabase_authenticate') {
+        return safeCall(() => {
+          const args = request.params?.arguments as { username: string; password: string };
+          return handleAuthenticate(args, sessionId, this.sessionClients);
+        });
+      }
+
+      const client = this.getClientForSession(sessionId);
+      await client.getSessionToken();
+
       switch (request.params?.name) {
         case 'search':
           return safeCall(() =>
             handleSearch(
               request,
               requestId,
-              this.apiClient,
+              client,
               this.logDebug.bind(this),
               this.logInfo.bind(this),
               this.logWarn.bind(this),
@@ -519,7 +576,7 @@ export class MetabaseServer {
             handleList(
               request,
               requestId,
-              this.apiClient,
+              client,
               this.logDebug.bind(this),
               this.logInfo.bind(this),
               this.logWarn.bind(this),
@@ -532,7 +589,7 @@ export class MetabaseServer {
             handleExecute(
               request,
               requestId,
-              this.apiClient,
+              client,
               this.logDebug.bind(this),
               this.logInfo.bind(this),
               this.logWarn.bind(this),
@@ -545,7 +602,7 @@ export class MetabaseServer {
             handleExport(
               request,
               requestId,
-              this.apiClient,
+              client,
               this.logDebug.bind(this),
               this.logInfo.bind(this),
               this.logWarn.bind(this),
@@ -557,7 +614,7 @@ export class MetabaseServer {
           return safeCall(() =>
             handleClearCache(
               request,
-              this.apiClient,
+              client,
               this.logInfo.bind(this),
               this.logWarn.bind(this),
               this.logError.bind(this)
@@ -569,7 +626,7 @@ export class MetabaseServer {
             handleRetrieve(
               request,
               requestId,
-              this.apiClient,
+              client,
               this.logDebug.bind(this),
               this.logInfo.bind(this),
               this.logWarn.bind(this),
@@ -616,6 +673,44 @@ export class MetabaseServer {
       this.logInfo('Metabase MCP server successfully connected and running on stdio transport');
     } catch (error) {
       this.logFatal('Failed to start Metabase MCP server', error);
+      throw error;
+    }
+  }
+
+  async runHttp(port: number) {
+    try {
+      this.logInfo('Starting Metabase MCP server in HTTP mode');
+
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined, // stateless — one server instance handles all requests
+      });
+
+      const httpServer = createServer(async (req, res) => {
+        if (req.url?.startsWith('/mcp')) {
+          const chunks: Buffer[] = [];
+          for await (const chunk of req) {
+            chunks.push(chunk as Buffer);
+          }
+          const rawBody = Buffer.concat(chunks).toString();
+          const body = rawBody ? JSON.parse(rawBody) : undefined;
+          await transport.handleRequest(req, res, body);
+        } else {
+          res.writeHead(404, { 'Content-Type': 'text/plain' });
+          res.end('Not found');
+        }
+      });
+
+      await this.server.connect(transport);
+
+      await new Promise<void>((resolve, reject) => {
+        httpServer.listen(port, '0.0.0.0', () => {
+          this.logInfo(`Metabase MCP server running on HTTP port ${port}`);
+          resolve();
+        });
+        httpServer.once('error', reject);
+      });
+    } catch (error) {
+      this.logFatal('Failed to start Metabase MCP server in HTTP mode', error);
       throw error;
     }
   }
