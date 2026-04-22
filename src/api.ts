@@ -1009,6 +1009,142 @@ export class MetabaseApiClient {
   }
 
   /**
+   * Add a card to a dashboard.
+   * Fetches existing dashcards first, then PUTs the full list with the new card appended.
+   * New cards use id: -1 (negative int) which Metabase treats as "create this dashcard".
+   * This is compatible with Metabase v0.47+.
+   */
+  async addCardToDashboard(dashboardId: number, data: Record<string, unknown>): Promise<any> {
+    this.logDebug(`Adding card to dashboard ${dashboardId}`);
+
+    // Fetch current dashboard to get existing dashcards
+    const dashboard = await this.request<any>(`/api/dashboard/${dashboardId}`);
+    const existingCards: any[] = dashboard.dashcards ?? [];
+
+    // Append the new card with id: -1 — Metabase treats negative IDs as "create"
+    const newCard = { ...data, id: -1 };
+    const updatedCards = [...existingCards, newCard];
+
+    const result = await this.request<any>(`/api/dashboard/${dashboardId}/cards`, {
+      method: 'PUT',
+      body: JSON.stringify({ cards: updatedCards }),
+    });
+
+    this.dashboardCache.delete(dashboardId);
+    this.logInfo(`Successfully added card to dashboard ${dashboardId}`);
+
+    // Return the newly created dashcard (the one not in existingCards)
+    const existingIds = new Set(existingCards.map((c: any) => c.id));
+    const cards: any[] = result?.cards ?? (Array.isArray(result) ? result : []);
+    const newDashcard = cards.find((c: any) => !existingIds.has(c.id)) ?? result;
+    return newDashcard;
+  }
+
+  /**
+   * Update dashboard card positions/sizes (batch layout update)
+   */
+  async updateDashboardCards(dashboardId: number, cards: unknown[]): Promise<any> {
+    this.logDebug(`Updating cards layout for dashboard ${dashboardId}`);
+    const result = await this.request<any>(`/api/dashboard/${dashboardId}/cards`, {
+      method: 'PUT',
+      body: JSON.stringify({ cards }),
+    });
+    this.dashboardCache.delete(dashboardId);
+    this.logInfo(`Successfully updated card layout for dashboard ${dashboardId}`);
+    return result;
+  }
+
+  /**
+   * Create a new collection
+   */
+  async createCollection(data: Record<string, unknown>): Promise<any> {
+    this.logDebug('Creating new collection', { name: data.name });
+    const collection = await this.request<any>('/api/collection', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    this.clearCollectionsCache();
+    this.clearCollectionsListCache();
+    this.logInfo(`Successfully created collection ${collection.id}`);
+    return collection;
+  }
+
+  /**
+   * Update an existing collection
+   */
+  async updateCollection(collectionId: number, data: Record<string, unknown>): Promise<any> {
+    this.logDebug(`Updating collection ${collectionId}`);
+    const collection = await this.request<any>(`/api/collection/${collectionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    this.collectionCache.delete(collectionId);
+    this.clearCollectionsListCache();
+    this.logInfo(`Successfully updated collection ${collectionId}`);
+    return collection;
+  }
+
+  /**
+   * Create a new card (question/query)
+   */
+  async createCard(data: Record<string, unknown>): Promise<any> {
+    this.logDebug('Creating new card', { name: data.name });
+    const card = await this.request<any>('/api/card', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    this.clearCardsCache();
+    this.clearCardsListCache();
+    this.logInfo(`Successfully created card ${card.id}`);
+    return card;
+  }
+
+  /**
+   * Update an existing card
+   */
+  async updateCard(cardId: number, data: Record<string, unknown>): Promise<any> {
+    this.logDebug(`Updating card ${cardId}`);
+    const card = await this.request<any>(`/api/card/${cardId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    this.cardCache.delete(cardId);
+    this.clearCardsListCache();
+    this.logInfo(`Successfully updated card ${cardId}`);
+    return card;
+  }
+
+  /**
+   * Create a new dashboard
+   */
+  async createDashboard(data: Record<string, unknown>): Promise<any> {
+    this.logDebug('Creating new dashboard', { name: data.name });
+    const dashboard = await this.request<any>('/api/dashboard', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    this.clearDashboardsCache();
+    this.clearDashboardsListCache();
+    this.logInfo(`Successfully created dashboard ${dashboard.id}`);
+    return dashboard;
+  }
+
+  /**
+   * Update an existing dashboard
+   */
+  async updateDashboard(dashboardId: number, data: Record<string, unknown>): Promise<any> {
+    this.logDebug(`Updating dashboard ${dashboardId}`);
+    const dashboard = await this.request<any>(`/api/dashboard/${dashboardId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    this.dashboardCache.delete(dashboardId);
+    this.clearDashboardsListCache();
+    this.logInfo(`Successfully updated dashboard ${dashboardId}`);
+    return dashboard;
+  }
+
+  /**
    * Get current user information to determine user ID for personal collection filtering
    */
   async getCurrentUser(): Promise<CachedResponse<any>> {

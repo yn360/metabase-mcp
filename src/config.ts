@@ -29,32 +29,29 @@ function expandSystemVariables(path: string | undefined): string {
 }
 
 // Environment variable schema
-const envSchema = z
-  .object({
-    METABASE_URL: z.string().url('METABASE_URL must be a valid URL'),
-    METABASE_API_KEY: z.string().optional(),
-    METABASE_USER_EMAIL: z.string().email().optional(),
-    METABASE_PASSWORD: z.string().min(1).optional(),
-    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-    LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'fatal']).default('info'),
-    CACHE_TTL_MS: z
-      .string()
-      .default('600000')
-      .transform(val => parseInt(val, 10))
-      .pipe(z.number().positive()), // 10 minutes
-    REQUEST_TIMEOUT_MS: z
-      .string()
-      .default('600000')
-      .transform(val => parseInt(val, 10))
-      .pipe(z.number().positive()), // 10 minutes
-    EXPORT_DIRECTORY: z.string().default('${DOWNLOADS}/Metabase').transform(expandSystemVariables),
-    METABASE_READ_ONLY_MODE: z
-      .string()
-      .default('true')
-      .transform(val => val.toLowerCase() === 'true'),
-  })
-;
-
+const envSchema = z.object({
+  METABASE_URL: z.string().url('METABASE_URL must be a valid URL'),
+  METABASE_API_KEY: z.string().optional(),
+  METABASE_USER_EMAIL: z.string().email().optional(),
+  METABASE_PASSWORD: z.string().min(1).optional(),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+  CACHE_TTL_MS: z
+    .string()
+    .default('600000')
+    .transform(val => parseInt(val, 10))
+    .pipe(z.number().positive()), // 10 minutes
+  REQUEST_TIMEOUT_MS: z
+    .string()
+    .default('600000')
+    .transform(val => parseInt(val, 10))
+    .pipe(z.number().positive()), // 10 minutes
+  EXPORT_DIRECTORY: z.string().default('${DOWNLOADS}/Metabase').transform(expandSystemVariables),
+  METABASE_READ_ONLY_MODE: z
+    .string()
+    .default('true')
+    .transform(val => val.toLowerCase() === 'true'),
+});
 // Parse and validate environment variables
 function validateEnvironment() {
   try {

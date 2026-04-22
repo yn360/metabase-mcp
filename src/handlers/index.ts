@@ -5,3 +5,6 @@ export { handleExport } from './export/index.js';
 export { handleSearch } from './search.js';
 export { handleClearCache } from './clearCache.js';
 export { handleRetrieve } from './retrieve/index.js';
+export { handleCard } from './cards/index.js';
+export { handleDashboard } from './dashboards/index.js';
+export { handleCollection } from './collections/index.js';

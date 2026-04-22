@@ -56,6 +56,38 @@
     {
       "name": "clear_cache",
       "description": "Clear the internal cache for stored data"
+    },
+    {
+      "name": "create_card",
+      "description": "Create a new Metabase card (question/query)"
+    },
+    {
+      "name": "update_card",
+      "description": "Update an existing Metabase card"
+    },
+    {
+      "name": "create_dashboard",
+      "description": "Create a new Metabase dashboard"
+    },
+    {
+      "name": "update_dashboard",
+      "description": "Update an existing Metabase dashboard"
+    },
+    {
+      "name": "add_card_to_dashboard",
+      "description": "Add a card (question/query) to an existing Metabase dashboard"
+    },
+    {
+      "name": "update_dashboard_cards",
+      "description": "Update the position and size of cards on a Metabase dashboard"
+    },
+    {
+      "name": "create_collection",
+      "description": "Create a new Metabase collection to organize content"
+    },
+    {
+      "name": "update_collection",
+      "description": "Update an existing Metabase collection"
     }
   ],
   "keywords": [

@@ -27,6 +27,9 @@ import {
   handleSearch,
   handleClearCache,
   handleRetrieve,
+  handleCard,
+  handleDashboard,
+  handleCollection,
 } from './handlers/index.js';
 import {
   handleListResources,
@@ -515,135 +518,468 @@ export class MetabaseServer {
               required: [],
             },
           },
+          {
+            name: 'create_card',
+            description:
+              'Create a new Metabase card (question/query). Provide the query definition (dataset_query), display type, and optional collection location.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  description: 'Card name.',
+                },
+                database_id: {
+                  type: 'number',
+                  description: 'ID of the database to query.',
+                },
+                dataset_query: {
+                  type: 'object',
+                  description:
+                    'Query definition. For native SQL: { "type": "native", "native": { "query": "SELECT ..." }, "database": <database_id> }.',
+                },
+                display: {
+                  type: 'string',
+                  description:
+                    'Visualization type (e.g. "table", "bar", "line", "pie"). Defaults to "table".',
+                },
+                description: {
+                  type: 'string',
+                  description: 'Card description (optional).',
+                },
+                collection_id: {
+                  type: 'number',
+                  description: 'Collection ID to place the card in (optional).',
+                },
+                visualization_settings: {
+                  type: 'object',
+                  description: 'Visualization settings object (optional).',
+                },
+              },
+              required: ['name', 'database_id', 'dataset_query'],
+            },
+          },
+          {
+            name: 'update_card',
+            description:
+              'Update an existing Metabase card. Provide the card_id and any fields to change.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                card_id: {
+                  type: 'number',
+                  description: 'ID of the card to update.',
+                },
+                name: {
+                  type: 'string',
+                  description: 'New card name (optional).',
+                },
+                description: {
+                  type: 'string',
+                  description: 'New card description (optional).',
+                },
+                collection_id: {
+                  type: 'number',
+                  description: 'New collection ID to move the card to (optional).',
+                },
+                dataset_query: {
+                  type: 'object',
+                  description: 'Updated query definition (optional).',
+                },
+                display: {
+                  type: 'string',
+                  description: 'Updated visualization type (optional).',
+                },
+                visualization_settings: {
+                  type: 'object',
+                  description: 'Updated visualization settings (optional).',
+                },
+              },
+              required: ['card_id'],
+            },
+          },
+          {
+            name: 'create_dashboard',
+            description: 'Create a new Metabase dashboard. Optionally place it in a collection.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  description: 'Dashboard name.',
+                },
+                description: {
+                  type: 'string',
+                  description: 'Dashboard description (optional).',
+                },
+                collection_id: {
+                  type: 'number',
+                  description: 'Collection ID to place the dashboard in (optional).',
+                },
+              },
+              required: ['name'],
+            },
+          },
+          {
+            name: 'update_dashboard',
+            description:
+              'Update an existing Metabase dashboard. Provide the dashboard_id and any fields to change.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dashboard_id: {
+                  type: 'number',
+                  description: 'ID of the dashboard to update.',
+                },
+                name: {
+                  type: 'string',
+                  description: 'New dashboard name (optional).',
+                },
+                description: {
+                  type: 'string',
+                  description: 'New dashboard description (optional).',
+                },
+                collection_id: {
+                  type: 'number',
+                  description: 'New collection ID to move the dashboard to (optional).',
+                },
+              },
+              required: ['dashboard_id'],
+            },
+          },
+          {
+            name: 'add_card_to_dashboard',
+            description:
+              'Add a card (question/query) to an existing Metabase dashboard. Use retrieve(model: "dashboard") to inspect the current layout before placing cards. The dashboard grid is 18 columns wide.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dashboard_id: {
+                  type: 'number',
+                  description: 'ID of the dashboard to add the card to.',
+                },
+                card_id: {
+                  type: 'number',
+                  description: 'ID of the card (question) to add.',
+                },
+                row: {
+                  type: 'number',
+                  description: 'Row position on the dashboard grid (default: 0).',
+                },
+                col: {
+                  type: 'number',
+                  description: 'Column position on the dashboard grid (default: 0).',
+                },
+                size_x: {
+                  type: 'number',
+                  description: 'Width in grid columns (default: 4). Max 18.',
+                },
+                size_y: {
+                  type: 'number',
+                  description: 'Height in grid rows (default: 4).',
+                },
+              },
+              required: ['dashboard_id', 'card_id'],
+            },
+          },
+          {
+            name: 'update_dashboard_cards',
+            description:
+              'Update the position and size of cards on a Metabase dashboard (batch layout update). Each card entry must include the dashcard id (not card_id) from retrieve(model: "dashboard"), plus row, col, size_x, size_y. This replaces the layout for the provided dashcards.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dashboard_id: {
+                  type: 'number',
+                  description: 'ID of the dashboard to update.',
+                },
+                cards: {
+                  type: 'array',
+                  description:
+                    'Array of dashcard layout objects. Each must include: id (dashcard id from retrieve), row, col, size_x, size_y. Get dashcard IDs from retrieve(model: "dashboard", ids: [dashboard_id]).',
+                  items: {
+                    type: 'object',
+                  },
+                },
+              },
+              required: ['dashboard_id', 'cards'],
+            },
+          },
+          {
+            name: 'create_collection',
+            description:
+              'Create a new Metabase collection (folder) to organize cards, dashboards, and other content. Nest inside another collection by providing parent_id.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: false,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: {
+                  type: 'string',
+                  description: 'Collection name.',
+                },
+                description: {
+                  type: 'string',
+                  description: 'Collection description (optional).',
+                },
+                parent_id: {
+                  type: 'number',
+                  description:
+                    'Parent collection ID to nest this collection inside (optional; omit for root level).',
+                },
+              },
+              required: ['name'],
+            },
+          },
+          {
+            name: 'update_collection',
+            description:
+              'Update an existing Metabase collection. Can rename it, change its description, or move it to a different parent collection.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                collection_id: {
+                  type: 'number',
+                  description: 'ID of the collection to update.',
+                },
+                name: {
+                  type: 'string',
+                  description: 'New collection name (optional).',
+                },
+                description: {
+                  type: 'string',
+                  description: 'New collection description (optional).',
+                },
+                parent_id: {
+                  type: 'number',
+                  description: 'New parent collection ID to move this collection to (optional).',
+                },
+              },
+              required: ['collection_id'],
+            },
+          },
         ],
       };
     });
 
-    this.server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest, extra: { sessionId?: string }) => {
-      const toolName = request.params?.name || 'unknown';
-      const requestId = generateRequestId();
-      const sessionId = extra?.sessionId ?? 'default';
+    this.server.setRequestHandler(
+      CallToolRequestSchema,
+      async (request: CallToolRequest, extra: { sessionId?: string }) => {
+        const toolName = request.params?.name || 'unknown';
+        const requestId = generateRequestId();
+        const sessionId = extra?.sessionId ?? 'default';
 
-      this.logInfo(`Processing tool execution request: ${toolName}`, {
-        requestId,
-        arguments: request.params?.arguments,
-      });
-
-      // Helper to wrap handler calls and convert errors to tool results
-      // Handles both sync and async handlers
-      const safeCall = async <T>(
-        handler: () => T | Promise<T>
-      ): Promise<T | { content: { type: string; text: string }[]; isError: true }> => {
-        try {
-          return await handler();
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          this.logError(`Tool execution failed: ${errorMessage}`, error);
-          return {
-            content: [{ type: 'text', text: `Error: ${errorMessage}` }],
-            isError: true,
-          };
-        }
-      };
-
-      // metabase_authenticate does not require an existing client
-      if (request.params?.name === 'metabase_authenticate') {
-        return safeCall(() => {
-          const args = request.params?.arguments as { username: string; password: string };
-          return handleAuthenticate(args, sessionId, this.sessionClients);
+        this.logInfo(`Processing tool execution request: ${toolName}`, {
+          requestId,
+          arguments: request.params?.arguments,
         });
-      }
 
-      const client = this.getClientForSession(sessionId);
-      await client.getSessionToken();
+        // Helper to wrap handler calls and convert errors to tool results
+        // Handles both sync and async handlers
+        const safeCall = async <T>(
+          handler: () => T | Promise<T>
+        ): Promise<T | { content: { type: string; text: string }[]; isError: true }> => {
+          try {
+            return await handler();
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.logError(`Tool execution failed: ${errorMessage}`, error);
+            return {
+              content: [{ type: 'text', text: `Error: ${errorMessage}` }],
+              isError: true,
+            };
+          }
+        };
 
-      switch (request.params?.name) {
-        case 'search':
-          return safeCall(() =>
-            handleSearch(
-              request,
-              requestId,
-              client,
-              this.logDebug.bind(this),
-              this.logInfo.bind(this),
-              this.logWarn.bind(this),
-              this.logError.bind(this)
-            )
-          );
-
-        case 'list':
-          return safeCall(() =>
-            handleList(
-              request,
-              requestId,
-              client,
-              this.logDebug.bind(this),
-              this.logInfo.bind(this),
-              this.logWarn.bind(this),
-              this.logError.bind(this)
-            )
-          );
-
-        case 'execute':
-          return safeCall(() =>
-            handleExecute(
-              request,
-              requestId,
-              client,
-              this.logDebug.bind(this),
-              this.logInfo.bind(this),
-              this.logWarn.bind(this),
-              this.logError.bind(this)
-            )
-          );
-
-        case 'export':
-          return safeCall(() =>
-            handleExport(
-              request,
-              requestId,
-              client,
-              this.logDebug.bind(this),
-              this.logInfo.bind(this),
-              this.logWarn.bind(this),
-              this.logError.bind(this)
-            )
-          );
-
-        case 'clear_cache':
-          return safeCall(() =>
-            handleClearCache(
-              request,
-              client,
-              this.logInfo.bind(this),
-              this.logWarn.bind(this),
-              this.logError.bind(this)
-            )
-          );
-
-        case 'retrieve':
-          return safeCall(() =>
-            handleRetrieve(
-              request,
-              requestId,
-              client,
-              this.logDebug.bind(this),
-              this.logInfo.bind(this),
-              this.logWarn.bind(this),
-              this.logError.bind(this)
-            )
-          );
-
-        default:
-          this.logWarn(`Received request for unknown tool: ${request.params?.name}`, {
-            requestId,
+        // metabase_authenticate does not require an existing client
+        if (request.params?.name === 'metabase_authenticate') {
+          return safeCall(() => {
+            const args = request.params?.arguments as { username: string; password: string };
+            return handleAuthenticate(args, sessionId, this.sessionClients);
           });
-          return {
-            content: [{ type: 'text', text: `Error: Unknown tool '${request.params?.name}'` }],
-            isError: true,
-          };
+        }
+
+        const client = this.getClientForSession(sessionId);
+        await client.getSessionToken();
+
+        switch (request.params?.name) {
+          case 'search':
+            return safeCall(() =>
+              handleSearch(
+                request,
+                requestId,
+                client,
+                this.logDebug.bind(this),
+                this.logInfo.bind(this),
+                this.logWarn.bind(this),
+                this.logError.bind(this)
+              )
+            );
+
+          case 'list':
+            return safeCall(() =>
+              handleList(
+                request,
+                requestId,
+                client,
+                this.logDebug.bind(this),
+                this.logInfo.bind(this),
+                this.logWarn.bind(this),
+                this.logError.bind(this)
+              )
+            );
+
+          case 'execute':
+            return safeCall(() =>
+              handleExecute(
+                request,
+                requestId,
+                client,
+                this.logDebug.bind(this),
+                this.logInfo.bind(this),
+                this.logWarn.bind(this),
+                this.logError.bind(this)
+              )
+            );
+
+          case 'export':
+            return safeCall(() =>
+              handleExport(
+                request,
+                requestId,
+                client,
+                this.logDebug.bind(this),
+                this.logInfo.bind(this),
+                this.logWarn.bind(this),
+                this.logError.bind(this)
+              )
+            );
+
+          case 'clear_cache':
+            return safeCall(() =>
+              handleClearCache(
+                request,
+                client,
+                this.logInfo.bind(this),
+                this.logWarn.bind(this),
+                this.logError.bind(this)
+              )
+            );
+
+          case 'retrieve':
+            return safeCall(() =>
+              handleRetrieve(
+                request,
+                requestId,
+                client,
+                this.logDebug.bind(this),
+                this.logInfo.bind(this),
+                this.logWarn.bind(this),
+                this.logError.bind(this)
+              )
+            );
+
+          case 'create_card':
+          case 'update_card':
+            return safeCall(() =>
+              handleCard(
+                request,
+                requestId,
+                client,
+                this.logDebug.bind(this),
+                this.logInfo.bind(this),
+                this.logWarn.bind(this),
+                this.logError.bind(this)
+              )
+            );
+
+          case 'create_dashboard':
+          case 'update_dashboard':
+          case 'add_card_to_dashboard':
+          case 'update_dashboard_cards':
+            return safeCall(() =>
+              handleDashboard(
+                request,
+                requestId,
+                client,
+                this.logDebug.bind(this),
+                this.logInfo.bind(this),
+                this.logWarn.bind(this),
+                this.logError.bind(this)
+              )
+            );
+
+          case 'create_collection':
+          case 'update_collection':
+            return safeCall(() =>
+              handleCollection(
+                request,
+                requestId,
+                client,
+                this.logDebug.bind(this),
+                this.logInfo.bind(this),
+                this.logWarn.bind(this),
+                this.logError.bind(this)
+              )
+            );
+
+          default:
+            this.logWarn(`Received request for unknown tool: ${request.params?.name}`, {
+              requestId,
+            });
+            return {
+              content: [{ type: 'text', text: `Error: Unknown tool '${request.params?.name}'` }],
+              isError: true,
+            };
+        }
       }
-    });
+    );
   }
 
   /**
