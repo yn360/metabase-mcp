@@ -183,6 +183,42 @@ export class MetabaseApiClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        // Retry once with a fresh token when session has expired
+        if (
+          response.status === 401 &&
+          this.authMethod === AuthMethod.SESSION &&
+          path !== '/api/session'
+        ) {
+          this.sessionToken = null;
+          const freshToken = await this.getSessionToken();
+          const retryHeaders = { ...headers, 'X-Metabase-Session': freshToken };
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(() => retryController.abort(), this.REQUEST_TIMEOUT_MS);
+          try {
+            const retryResponse = await fetch(url.toString(), {
+              ...options,
+              headers: retryHeaders,
+              signal: retryController.signal,
+            });
+            clearTimeout(retryTimeoutId);
+            if (!retryResponse.ok) {
+              const retryErrorData = await retryResponse.json().catch(() => ({}));
+              const { resourceType, resourceId } = this.extractResourceFromPath(path);
+              throw createErrorFromHttpResponse(
+                retryResponse.status,
+                retryErrorData,
+                `API request to ${path}`,
+                resourceType,
+                resourceId
+              );
+            }
+            return retryResponse.json() as Promise<T>;
+          } catch (retryError) {
+            clearTimeout(retryTimeoutId);
+            throw retryError;
+          }
+        }
+
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = `API request failed with status ${response.status}: ${response.statusText}`;
         this.logWarn(errorMessage, errorData);

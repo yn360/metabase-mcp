@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -12,6 +13,7 @@ import {
   ListToolsRequestSchema,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
+  isInitializeRequest,
   type CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import { LogLevel } from './config.js';
@@ -60,9 +62,9 @@ export class MetabaseServer {
 
     this.apiClient = new MetabaseApiClient();
 
-    this.setupResourceHandlers();
-    this.setupToolHandlers();
-    this.setupPromptHandlers();
+    this.setupResourceHandlers(this.server);
+    this.setupToolHandlers(this.server);
+    this.setupPromptHandlers(this.server);
 
     // Enhanced error handling with logging
     this.server.onerror = (error: Error) => {
@@ -74,6 +76,20 @@ export class MetabaseServer {
       await this.server.close();
       process.exit(0);
     });
+  }
+
+  private createMcpServer(): Server {
+    const server = new Server(
+      { name: 'metabase-mcp', version: VERSION },
+      { capabilities: { resources: {}, tools: {}, prompts: {} } }
+    );
+    server.onerror = (error: Error) => {
+      this.logError('Unexpected server error occurred', error);
+    };
+    this.setupResourceHandlers(server);
+    this.setupToolHandlers(server);
+    this.setupPromptHandlers(server);
+    return server;
   }
 
   // Enhanced logging utilities
@@ -139,8 +155,8 @@ export class MetabaseServer {
   /**
    * Set up resource handlers
    */
-  private setupResourceHandlers() {
-    this.server.setRequestHandler(ListResourcesRequestSchema, async request => {
+  private setupResourceHandlers(server: Server) {
+    server.setRequestHandler(ListResourcesRequestSchema, async request => {
       return handleListResources(
         request,
         this.apiClient,
@@ -149,11 +165,11 @@ export class MetabaseServer {
       );
     });
 
-    this.server.setRequestHandler(ListResourceTemplatesRequestSchema, async request => {
+    server.setRequestHandler(ListResourceTemplatesRequestSchema, async request => {
       return handleListResourceTemplates(request, this.logInfo.bind(this));
     });
 
-    this.server.setRequestHandler(ReadResourceRequestSchema, async request => {
+    server.setRequestHandler(ReadResourceRequestSchema, async request => {
       return handleReadResource(
         request,
         this.apiClient,
@@ -183,8 +199,8 @@ export class MetabaseServer {
     );
   }
 
-  private setupToolHandlers() {
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+  private setupToolHandlers(server: Server) {
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
       this.logInfo('Processing request to list available tools');
       return {
         tools: [
@@ -808,7 +824,7 @@ export class MetabaseServer {
       };
     });
 
-    this.server.setRequestHandler(
+    server.setRequestHandler(
       CallToolRequestSchema,
       async (request: CallToolRequest, extra: { sessionId?: string }) => {
         const toolName = request.params?.name || 'unknown';
@@ -985,12 +1001,12 @@ export class MetabaseServer {
   /**
    * Set up prompt handlers
    */
-  private setupPromptHandlers() {
-    this.server.setRequestHandler(ListPromptsRequestSchema, async request => {
+  private setupPromptHandlers(server: Server) {
+    server.setRequestHandler(ListPromptsRequestSchema, async request => {
       return handleListPrompts(request, this.logInfo.bind(this));
     });
 
-    this.server.setRequestHandler(GetPromptRequestSchema, async request => {
+    server.setRequestHandler(GetPromptRequestSchema, async request => {
       return handleGetPrompt(
         request,
         this.apiClient,
@@ -1017,26 +1033,57 @@ export class MetabaseServer {
     try {
       this.logInfo('Starting Metabase MCP server in HTTP mode');
 
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined, // stateless — one server instance handles all requests
-      });
+      // One transport (and one Server) per client session, keyed by session UUID.
+      const httpTransports = new Map<string, StreamableHTTPServerTransport>();
 
       const httpServer = createServer(async (req, res) => {
-        if (req.url?.startsWith('/mcp')) {
-          const chunks: Buffer[] = [];
-          for await (const chunk of req) {
-            chunks.push(chunk as Buffer);
-          }
-          const rawBody = Buffer.concat(chunks).toString();
-          const body = rawBody ? JSON.parse(rawBody) : undefined;
-          await transport.handleRequest(req, res, body);
-        } else {
+        if (!req.url?.startsWith('/mcp')) {
           res.writeHead(404, { 'Content-Type': 'text/plain' });
           res.end('Not found');
+          return;
+        }
+
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) {
+          chunks.push(chunk as Buffer);
+        }
+        const rawBody = Buffer.concat(chunks).toString();
+        const body = rawBody ? JSON.parse(rawBody) : undefined;
+
+        const sessionId = req.headers['mcp-session-id'];
+
+        if (typeof sessionId === 'string' && httpTransports.has(sessionId)) {
+          // Existing session — route to its transport
+          await httpTransports.get(sessionId)!.handleRequest(req, res, body);
+        } else if (!sessionId && isInitializeRequest(body)) {
+          // New session — each client gets its own Server + transport
+          const sessionServer = this.createMcpServer();
+          const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID(),
+            onsessioninitialized: (sid) => {
+              httpTransports.set(sid, transport);
+            },
+          });
+          transport.onclose = () => {
+            const sid = transport.sessionId;
+            if (sid) {
+              httpTransports.delete(sid);
+              this.sessionClients.delete(sid);
+            }
+          };
+          await sessionServer.connect(transport);
+          await transport.handleRequest(req, res, body);
+        } else {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              error: { code: -32000, message: 'Bad Request: No valid session ID provided' },
+              id: null,
+            })
+          );
         }
       });
-
-      await this.server.connect(transport);
 
       await new Promise<void>((resolve, reject) => {
         httpServer.listen(port, '0.0.0.0', () => {
