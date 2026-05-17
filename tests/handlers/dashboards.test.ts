@@ -1,5 +1,5 @@
 /**
- * Unit tests for the dashboard mutation handlers (create_dashboard, update_dashboard)
+ * Unit tests for the dashboard mutation handlers
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -244,6 +244,192 @@ describe('handleDashboard', () => {
       expect(parsed.operation).toBe('update_dashboard_cards');
       expect(parsed.updated_count).toBe(1);
       expect(mockApiClient.updateDashboardCards).toHaveBeenCalledWith(1, cards);
+    });
+  });
+
+  describe('update_dashboard_parameters', () => {
+    it('should throw error when dashboard_id is missing', async () => {
+      const request = createMockRequest('update_dashboard_parameters', {
+        parameters: [{ name: 'Date', type: 'date/range' }],
+      });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      await expect(
+        handleDashboard(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow(McpError);
+
+      expect(mockLogger.logWarn).toHaveBeenCalledWith(
+        'Missing or invalid dashboard_id parameter',
+        { requestId: 'test-request-id' }
+      );
+    });
+
+    it('should throw error when parameters is empty', async () => {
+      const request = createMockRequest('update_dashboard_parameters', {
+        dashboard_id: 1,
+        parameters: [],
+      });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      await expect(
+        handleDashboard(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow(McpError);
+
+      expect(mockLogger.logWarn).toHaveBeenCalledWith(
+        'Missing or invalid parameters field',
+        { requestId: 'test-request-id' }
+      );
+    });
+
+    it('should update dashboard parameters successfully', async () => {
+      const parameters = [{ id: 'abc', name: 'Date Range', type: 'date/range', slug: 'date_range' }];
+      mockApiClient.updateDashboard.mockResolvedValue({ ...sampleDashboard, parameters });
+
+      const request = createMockRequest('update_dashboard_parameters', {
+        dashboard_id: 1,
+        parameters,
+      });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      const result = await handleDashboard(
+        request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError
+      );
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.operation).toBe('update_dashboard_parameters');
+      expect(parsed.dashboard_id).toBe(sampleDashboard.id);
+      expect(parsed.parameter_count).toBe(1);
+      expect(mockApiClient.updateDashboard).toHaveBeenCalledWith(1, { parameters });
+    });
+  });
+
+  describe('update_dashboard_tabs', () => {
+    it('should throw error when dashboard_id is missing', async () => {
+      const request = createMockRequest('update_dashboard_tabs', {
+        tabs: [{ name: 'Overview' }],
+      });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      await expect(
+        handleDashboard(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow(McpError);
+
+      expect(mockLogger.logWarn).toHaveBeenCalledWith(
+        'Missing or invalid dashboard_id parameter',
+        { requestId: 'test-request-id' }
+      );
+    });
+
+    it('should throw error when tabs is empty', async () => {
+      const request = createMockRequest('update_dashboard_tabs', { dashboard_id: 1, tabs: [] });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      await expect(
+        handleDashboard(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow(McpError);
+
+      expect(mockLogger.logWarn).toHaveBeenCalledWith(
+        'Missing or invalid tabs field',
+        { requestId: 'test-request-id' }
+      );
+    });
+
+    it('should throw error when a tab is missing a name', async () => {
+      const request = createMockRequest('update_dashboard_tabs', {
+        dashboard_id: 1,
+        tabs: [{ name: '' }],
+      });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      await expect(
+        handleDashboard(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow(McpError);
+    });
+
+    it('should update dashboard tabs successfully', async () => {
+      const tabs = [{ name: 'Overview' }, { name: 'Details' }];
+      mockApiClient.updateDashboard.mockResolvedValue({ ...sampleDashboard, tabs });
+
+      const request = createMockRequest('update_dashboard_tabs', { dashboard_id: 1, tabs });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      const result = await handleDashboard(
+        request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError
+      );
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.operation).toBe('update_dashboard_tabs');
+      expect(parsed.tab_count).toBe(2);
+      expect(mockApiClient.updateDashboard).toHaveBeenCalledWith(1, { tabs });
+    });
+  });
+
+  describe('update_dashcard_parameter_mappings', () => {
+    it('should throw error when dashboard_id is missing', async () => {
+      const request = createMockRequest('update_dashcard_parameter_mappings', {
+        mappings: [{ dashcard_id: 42, parameter_mappings: [] }],
+      });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      await expect(
+        handleDashboard(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow(McpError);
+
+      expect(mockLogger.logWarn).toHaveBeenCalledWith(
+        'Missing or invalid dashboard_id parameter',
+        { requestId: 'test-request-id' }
+      );
+    });
+
+    it('should throw error when mappings is empty', async () => {
+      const request = createMockRequest('update_dashcard_parameter_mappings', {
+        dashboard_id: 1,
+        mappings: [],
+      });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      await expect(
+        handleDashboard(request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError)
+      ).rejects.toThrow(McpError);
+
+      expect(mockLogger.logWarn).toHaveBeenCalledWith(
+        'Missing or invalid mappings field',
+        { requestId: 'test-request-id' }
+      );
+    });
+
+    it('should update dashcard parameter mappings successfully', async () => {
+      const existingDashcards = [
+        { id: 42, card_id: 5, row: 0, col: 0, size_x: 4, size_y: 4, parameter_mappings: [] },
+      ];
+      mockApiClient.getDashboard.mockResolvedValue({ dashcards: existingDashcards });
+      mockApiClient.updateDashboardCards.mockResolvedValue([]);
+
+      const mapping = {
+        parameter_id: 'param-1',
+        card_id: 5,
+        target: ['dimension', ['field', 123, null]],
+      };
+      const request = createMockRequest('update_dashcard_parameter_mappings', {
+        dashboard_id: 1,
+        mappings: [{ dashcard_id: 42, parameter_mappings: [mapping] }],
+      });
+      const [logDebug, logInfo, logWarn, logError] = getLoggerFunctions();
+
+      const result = await handleDashboard(
+        request, 'test-request-id', mockApiClient as any, logDebug, logInfo, logWarn, logError
+      );
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.success).toBe(true);
+      expect(parsed.operation).toBe('update_dashcard_parameter_mappings');
+      expect(parsed.updated_dashcard_ids).toContain(42);
+      expect(mockApiClient.updateDashboardCards).toHaveBeenCalledWith(
+        1,
+        [{ ...existingDashcards[0], parameter_mappings: [mapping] }]
+      );
     });
   });
 });

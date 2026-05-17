@@ -5,11 +5,17 @@ import { createDashboard } from './createDashboard.js';
 import { updateDashboard } from './updateDashboard.js';
 import { addCardToDashboard } from './addCardToDashboard.js';
 import { updateDashboardCards } from './updateDashboardCards.js';
+import { updateDashboardParameters } from './updateDashboardParameters.js';
+import { updateDashboardTabs } from './updateDashboardTabs.js';
+import { updateDashcardParameterMappings } from './updateDashcardParameterMappings.js';
 import {
   CreateDashboardArgs,
   UpdateDashboardArgs,
   AddCardToDashboardArgs,
   UpdateDashboardCardsArgs,
+  UpdateDashboardParametersArgs,
+  UpdateDashboardTabsArgs,
+  UpdateDashcardParameterMappingsArgs,
   DashboardOperationResponse,
 } from './types.js';
 
@@ -62,6 +68,39 @@ export async function handleDashboard(
     case 'update_dashboard_cards':
       return updateDashboardCards(
         args as unknown as UpdateDashboardCardsArgs,
+        requestId,
+        apiClient,
+        logDebug,
+        logInfo,
+        logWarn,
+        logError
+      );
+
+    case 'update_dashboard_parameters':
+      return updateDashboardParameters(
+        args as unknown as UpdateDashboardParametersArgs,
+        requestId,
+        apiClient,
+        logDebug,
+        logInfo,
+        logWarn,
+        logError
+      );
+
+    case 'update_dashboard_tabs':
+      return updateDashboardTabs(
+        args as unknown as UpdateDashboardTabsArgs,
+        requestId,
+        apiClient,
+        logDebug,
+        logInfo,
+        logWarn,
+        logError
+      );
+
+    case 'update_dashcard_parameter_mappings':
+      return updateDashcardParameterMappings(
+        args as unknown as UpdateDashcardParameterMappingsArgs,
         requestId,
         apiClient,
         logDebug,

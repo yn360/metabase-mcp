@@ -4,7 +4,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
-const VERSION = '1.1.5';
+const VERSION = '1.1.2';
 import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
@@ -755,6 +755,137 @@ export class MetabaseServer {
                 },
               },
               required: ['dashboard_id', 'cards'],
+            },
+          },
+          {
+            name: 'update_dashboard_parameters',
+            description:
+              'Set the parameters (filters) on a Metabase dashboard. Replaces the full parameters array. Use retrieve(model: "dashboard") to inspect existing parameters before updating. Common types: date/range, string/=, number/=.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dashboard_id: {
+                  type: 'number',
+                  description: 'ID of the dashboard to update.',
+                },
+                parameters: {
+                  type: 'array',
+                  description:
+                    'Full parameters array to set on the dashboard. Each object should include name and type. Omit id for new parameters; Metabase will assign one.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string', description: 'Parameter ID (omit for new parameters).' },
+                      name: { type: 'string', description: 'Display name of the parameter.' },
+                      type: { type: 'string', description: 'Parameter type, e.g. date/range, string/=, number/=.' },
+                      slug: { type: 'string', description: 'URL slug for the parameter.' },
+                      default: { description: 'Default value for the parameter.' },
+                      values_source_type: { type: 'string', description: 'Source type for parameter values (optional).' },
+                      values_source_config: { type: 'object', description: 'Config for the values source (optional).' },
+                    },
+                    required: ['name', 'type'],
+                  },
+                },
+              },
+              required: ['dashboard_id', 'parameters'],
+            },
+          },
+          {
+            name: 'update_dashboard_tabs',
+            description:
+              'Set the tabs on a Metabase dashboard. Replaces the full tabs array. Omit id to create new tabs; include id to update existing ones. Use retrieve(model: "dashboard") to inspect current tabs.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dashboard_id: {
+                  type: 'number',
+                  description: 'ID of the dashboard to update.',
+                },
+                tabs: {
+                  type: 'array',
+                  description:
+                    'Full tabs array to set on the dashboard. Each object must have a name. Include id to update an existing tab; omit id to create a new one.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'number', description: 'Tab ID (omit for new tabs).' },
+                      name: { type: 'string', description: 'Display name of the tab.' },
+                    },
+                    required: ['name'],
+                  },
+                },
+              },
+              required: ['dashboard_id', 'tabs'],
+            },
+          },
+          {
+            name: 'update_dashcard_parameter_mappings',
+            description:
+              'Wire dashboard parameters to cards by setting parameter_mappings on dashcards. Use retrieve(model: "dashboard") to get dashcard IDs, card IDs, and existing parameter IDs before calling this tool.',
+            annotations: {
+              readOnlyHint: false,
+              destructiveHint: false,
+              idempotentHint: true,
+              openWorldHint: false,
+            },
+            inputSchema: {
+              type: 'object',
+              properties: {
+                dashboard_id: {
+                  type: 'number',
+                  description: 'ID of the dashboard.',
+                },
+                mappings: {
+                  type: 'array',
+                  description:
+                    'Array of dashcard mapping entries. Each entry targets one dashcard by its id and provides the full parameter_mappings array to set on it.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      dashcard_id: {
+                        type: 'number',
+                        description: 'The dashcard id (from retrieve, not card_id).',
+                      },
+                      parameter_mappings: {
+                        type: 'array',
+                        description: 'Parameter mappings to set on this dashcard.',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            parameter_id: {
+                              type: 'string',
+                              description: 'ID of the dashboard parameter to wire.',
+                            },
+                            card_id: {
+                              type: 'number',
+                              description: 'ID of the card (question) being targeted.',
+                            },
+                            target: {
+                              description:
+                                'Target dimension in the card, e.g. ["dimension", ["field", 123, null]].',
+                            },
+                          },
+                          required: ['parameter_id', 'card_id', 'target'],
+                        },
+                      },
+                    },
+                    required: ['dashcard_id', 'parameter_mappings'],
+                  },
+                },
+              },
+              required: ['dashboard_id', 'mappings'],
             },
           },
           {
