@@ -10,8 +10,7 @@ import {
 import { config, authMethod, AuthMethod } from '../../config.js';
 import * as XLSX from 'xlsx';
 import { CardExportParams, ExportResponse } from './types.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import { exportLocationFields, saveExportFile } from './savedExport.js';
 
 /**
  * Extract first 5 rows preview in standardized JSON format from export data
@@ -250,45 +249,38 @@ export async function exportCard(
       };
     }
 
-    // Always save files to Downloads/Metabase directory
+    // Stdio writes the named file under EXPORT_DIRECTORY. HTTP stores a random id and
+    // returns a download URL, because the process is not on the user's machine.
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
     const sanitizedCustomFilename = sanitizeFilename(filename);
     const sanitizedCardName = sanitizeFilename(cardName);
     const baseFilename = sanitizedCustomFilename || `${sanitizedCardName}_${timestamp}`;
     const finalFilename = `${baseFilename}.${format}`;
 
-    // Use configured export directory
-    const exportDirectory = config.EXPORT_DIRECTORY;
-    const savedFilePath = path.join(exportDirectory, finalFilename);
-
     let fileSaveError: string | undefined;
+    let saved: ReturnType<typeof saveExportFile> | undefined;
 
     try {
-      // Ensure export directory exists
-      if (!fs.existsSync(exportDirectory)) {
-        fs.mkdirSync(exportDirectory, { recursive: true });
-      }
-
-      // Write the file based on format and calculate file size
+      let body: string | Buffer;
       if (format === 'json') {
-        const jsonString = JSON.stringify(responseData, null, 2);
-        fs.writeFileSync(savedFilePath, jsonString, 'utf8');
-        fileSize = Buffer.byteLength(jsonString, 'utf8');
+        body = JSON.stringify(responseData, null, 2);
       } else if (format === 'csv') {
-        fs.writeFileSync(savedFilePath, responseData, 'utf8');
-        fileSize = Buffer.byteLength(responseData, 'utf8');
-      } else if (format === 'xlsx') {
-        // Handle binary data for XLSX
-        if (responseData instanceof ArrayBuffer) {
-          const buffer = Buffer.from(responseData);
-          fs.writeFileSync(savedFilePath, buffer);
-          fileSize = buffer.length;
-        } else {
-          throw new Error('XLSX response is not in expected ArrayBuffer format');
-        }
+        body = responseData;
+      } else if (responseData instanceof ArrayBuffer) {
+        body = Buffer.from(responseData);
+      } else {
+        throw new Error('XLSX response is not in expected ArrayBuffer format');
       }
 
-      logInfo(`Successfully exported to ${savedFilePath}`);
+      saved = saveExportFile({
+        exportDirectory: config.EXPORT_DIRECTORY,
+        downloadName: finalFilename,
+        format,
+        body,
+        publicBaseUrl: config.OAUTH_PUBLIC_URL,
+      });
+      fileSize = saved.fileSize;
+      logInfo(`Successfully exported to ${saved.downloadUrl ?? saved.filePath}`);
     } catch (saveError) {
       fileSaveError = saveError instanceof Error ? saveError.message : 'Unknown file save error';
       logError(`Failed to save export file: ${fileSaveError}`, saveError);
@@ -318,7 +310,7 @@ export async function exportCard(
     // Successful export - return standardized JSON response
     const successResponse: any = {
       success: true,
-      file_path: savedFilePath,
+      ...exportLocationFields(saved!),
       row_count: rowCount,
       file_size_bytes: fileSize,
       preview_data: previewData,

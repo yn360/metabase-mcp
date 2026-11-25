@@ -49,6 +49,12 @@ const envSchema = z.object({
     .default('600000')
     .transform(val => parseInt(val, 10))
     .pipe(z.number().positive()), // 10 minutes
+  // How long an HTTP export download link stays valid. 30 minutes.
+  EXPORT_TTL_MS: z
+    .string()
+    .default('1800000')
+    .transform(val => parseInt(val, 10))
+    .pipe(z.number().positive()),
   EXPORT_DIRECTORY: z.string().default('${DOWNLOADS}/Metabase').transform(expandSystemVariables),
   METABASE_READ_ONLY_MODE: z
     .string()
@@ -80,6 +86,7 @@ function createTestConfig() {
     LOG_LEVEL: 'info' as const,
     CACHE_TTL_MS: 600000,
     REQUEST_TIMEOUT_MS: 600000,
+    EXPORT_TTL_MS: 1800000,
     EXPORT_DIRECTORY: join(homedir(), 'Downloads', 'Metabase'),
     METABASE_READ_ONLY_MODE: true,
   };

@@ -50,6 +50,7 @@ LOG_LEVEL=info                         # debug, info, warn, error, fatal (debug 
 CACHE_TTL_MS=600000                    # 10 min default
 REQUEST_TIMEOUT_MS=600000              # 10 min default
 EXPORT_DIRECTORY=~/Downloads/Metabase
+EXPORT_TTL_MS=1800000                  # HTTP download link lifetime, 30 min default
 METABASE_READ_ONLY_MODE=true           # Restrict to SELECT queries
 ```
 

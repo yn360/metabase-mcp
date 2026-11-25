@@ -4,7 +4,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 import {
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
@@ -44,6 +44,7 @@ import {
   handleReadResource,
 } from './handlers/resources/index.js';
 import { handleListPrompts, handleGetPrompt } from './handlers/prompts/index.js';
+import { sendExportDownload } from './handlers/export/savedExport.js';
 
 export class MetabaseServer {
   private server: Server;
@@ -468,8 +469,9 @@ export class MetabaseServer {
           },
           {
             name: 'export',
-            description:
-              'Unified command to export large SQL query results or saved cards using Metabase export endpoints (supports up to 1M rows). Returns data in specified format (CSV, JSON, or XLSX) and automatically saves to Downloads/Metabase folder.',
+            description: config.OAUTH_PUBLIC_URL
+              ? `Unified command to export large SQL query results or saved cards using Metabase export endpoints (supports up to 1M rows). Returns CSV, JSON, or XLSX as a short-lived download_url. The link is the only way to get the file. It expires after ${config.EXPORT_TTL_MS / 60000} minutes and is not written to the user Downloads folder.`
+              : 'Unified command to export large SQL query results or saved cards using Metabase export endpoints (supports up to 1M rows). Returns data in specified format (CSV, JSON, or XLSX) and automatically saves to Downloads/Metabase folder.',
             annotations: {
               readOnlyHint: true,
               destructiveHint: false,
@@ -1254,6 +1256,10 @@ export class MetabaseServer {
           clientRegistrationHandler({ clientsStore: provider.clientsStore })
         );
         mcpAuth = requireBearerAuth({ verifier: provider, resourceMetadataUrl });
+        // The id in the path is the secret. The browser that opens the link does not send the MCP token.
+        app.get(`${base}/exports/:id`, (req, res) => {
+          sendExportDownload(String(req.params.id), res);
+        });
         this.logInfo(`OAuth mode enabled, issuer ${authorizationServerMetadata.issuer}`);
       }
 

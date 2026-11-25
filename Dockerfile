@@ -5,7 +5,7 @@ FROM node:lts-alpine
 
 LABEL maintainer="Jericho Sequitin <https://github.com/jerichosequitin>"
 LABEL description="High-performance MCP server for Metabase with response optimization and robust error handling"
-LABEL version="1.2.0"
+LABEL version="1.2.1"
 
 # Set working directory
 WORKDIR /usr/src/app
@@ -35,6 +35,7 @@ RUN mkdir -p /home/node/exports && chown node:node /home/node/exports
 ENV NODE_ENV=production \
     LOG_LEVEL=info \
     EXPORT_DIRECTORY=/home/node/exports \
+    EXPORT_TTL_MS=1800000 \
     METABASE_READ_ONLY_MODE=true
 
 # Use non-root user for better security
